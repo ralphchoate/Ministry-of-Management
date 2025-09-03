@@ -3,786 +3,347 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Manager Parable Coach</title>
+  <title>Manager Parable Coach — Vanilla</title>
   <meta name="description" content="Draw short parables with morals, reflections, and actions to help managers think clearly." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Ccircle cx='64' cy='64' r='62' fill='%23000'/%3E%3Cpath d='M38 78c8 10 18 15 26 15 15 0 26-12 26-27 0-15-11-27-26-27-8 0-18 5-26 15V30h-8v68h8V78z' fill='%23fff'/%3E%3C/svg%3E" />
-  <!-- TailwindCSS (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React 18 UMD + Babel for in-browser JSX transform -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     html, body { height: 100%; }
     body { background: linear-gradient(to bottom, #ffffff, #f9fafb); }
+    .chip { padding: 0.25rem 0.75rem; border-radius: 1rem; border: 1px solid #d1d5db; font-size: 0.875rem; box-shadow: 0 1px 1px rgba(0,0,0,0.05); background: white; color: #374151; }
+    .chip.active { background: rgba(0,0,0,0.9); color: white; border-color: black; }
+    .btn { padding: 0.5rem 1rem; border-radius: 1rem; background: rgba(0,0,0,0.9); color: white; box-shadow: 0 1px 1px rgba(0,0,0,0.05); }
+    .btn-outline { padding: 0.25rem 0.75rem; border-radius: 1rem; border: 1px solid #d1d5db; font-size: 0.875rem; }
+    .card { background: white; border-radius: 1rem; padding: 1rem; box-shadow: 0 1px 1px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; }
+    .note { font-size: 0.75rem; color: #6b7280; line-height: 1.2; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div class="min-h-dvh w-full text-gray-900">
+    <div class="max-w-5xl mx-auto p-6 md:p-10">
+      <header class="mb-6 md:mb-10">
+        <h1 class="text-2xl md:text-4xl font-semibold tracking-tight">Manager Parable Coach</h1>
+        <p class="text-gray-600 mt-2 max-w-2xl">
+          Give me a challenge. I’ll return a short parable, a moral, three reflection prompts, and three next steps—
+          practical, memorable, and just a bit mischievous.
+        </p>
+      </header>
 
-  <script type="text/babel">
-    const { useMemo, useState, useEffect, useRef } = React;
+      <section class="grid md:grid-cols-3 gap-4 md:gap-6 mb-6">
+        <div class="md:col-span-2 card">
+          <label class="text-sm font-medium">Describe your challenge</label>
+          <textarea id="challenge" class="mt-2 w-full h-28 rounded-xl border border-gray-300 p-3 focus:outline-none focus:ring-2 focus:ring-black/10"
+            placeholder="E.g., We’re drowning in half-done projects and stakeholders want everything yesterday."></textarea>
 
-    // -----------------------------
-    // Data Types (implicit via JS)
-    // -----------------------------
+          <div class="mt-4">
+            <label class="text-sm font-medium">Tags (optional)</label>
+            <div id="tagPicker" class="mt-2 flex flex-wrap gap-2"></div>
+            <p id="detected" class="note"></p>
+          </div>
 
-    // -----------------------------
-    // Tag catalog
-    // -----------------------------
+          <div class="mt-4 flex flex-wrap gap-4 items-center">
+            <div>
+              <label class="text-sm font-medium">Tone</label>
+              <div id="toneSelect" class="mt-2 flex gap-2 items-center"></div>
+            </div>
+            <div>
+              <label class="text-sm font-medium">Length</label>
+              <div id="lengthToggle" class="mt-2 inline-flex rounded-2xl border border-gray-300 overflow-hidden shadow-sm"></div>
+            </div>
+            <div class="ml-auto flex gap-2 items-end">
+              <button id="drawBtn" class="btn">Draw a Parable</button>
+              <button id="copyBtn" class="btn-outline hidden">Copy</button>
+            </div>
+          </div>
+
+          <p class="note mt-2">
+            Not for legal, HR, or safety emergencies. For harassment, discrimination, or legal issues, involve HR/Legal.
+          </p>
+        </div>
+
+        <div class="card flex flex-col">
+          <h3 class="font-medium mb-2">Session</h3>
+          <div id="chat" class="flex-1 overflow-y-auto pr-1 space-y-3" style="max-height: 420px;">
+            <p class="note">Your conversation will appear here. Try a challenge like “We have too many priorities and quality is slipping.”</p>
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button id="angleBtn" class="btn-outline" disabled>Another angle</button>
+            <button id="copyBtn2" class="btn-outline hidden">Copy</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="result" class="card hidden"></section>
+
+      <footer class="mt-8 text-sm text-gray-500">
+        Built as an MVP. Want a Slack/Teams version, analytics, or your org’s stories baked in? Drop a line.
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    // DATA ------------------------------
     const TAGS = [
-      "Alignment",
-      "Communication",
-      "Prioritization",
-      "Delegation",
-      "Decision-Making",
-      "Change",
-      "Crisis",
-      "Stakeholders",
-      "Innovation",
-      "Constraints",
-      "Quality",
-      "Technical Debt",
-      "Process/Flow",
-      "Feedback",
-      "Performance",
-      "Burnout",
-      "Roadmapping",
-      "Compliance/Audit",
-      "Data & Metrics",
-      "Vendor Mgmt",
+      "Alignment","Communication","Prioritization","Delegation","Decision-Making","Change","Crisis","Stakeholders",
+      "Innovation","Constraints","Quality","Technical Debt","Process/Flow","Feedback","Performance","Burnout",
+      "Roadmapping","Compliance/Audit","Data & Metrics","Vendor Mgmt"
     ];
 
-    // -----------------------------
-    // Curated parables
-    // -----------------------------
     const PARABLES = [
-      {
-        id: "lighthouse-fleet",
-        title: "The Lighthouse and the Fleet",
-        setting: "Coastline",
-        tags: ["Alignment", "Communication", "Decision-Making"],
-        short:
-          "A fleet once waited for orders in choppy seas. Captains radioed for precise headings, but the admiral only lit a tall lighthouse and sent a single message: ‘Sail so our people arrive safely and supplies land on time.’ With the intent clear, each captain chose the best path for their ship—some hugged the coast, others cut through swells. They arrived at dawn, not in perfect formation, but together and on time. The admiral smiled: when intent is bright, autonomy steers itself.",
-        full:
-          "A fleet idled in choppy seas as night pressed in. Captains begged headquarters for exact headings: ‘Two degrees starboard? Half speed?’ The admiral instead lit a high lighthouse visible to all and sent a single message: ‘Our purpose is safe arrival and on‑time delivery for the villages ahead.’ With intent illuminated, each captain chose the route that best fit their ship—one hugged the coast to spare a damaged rudder, another cut through swells to beat the tide. They reached at dawn, not in perfect formation but all intact. The admiral debriefed: ‘Commands create compliance. Intent creates judgment. In storms, judgment scales better than control.’",
-        moral: "Broadcast intent, not just instructions.",
-        reflections: [
-          "What single, bright intent should your team steer by this month?",
-          "Where are you over‑specifying steps instead of clarifying outcomes?",
-          "Who needs autonomy the most to succeed in current conditions?",
-        ],
-        actions: [
-          "Draft a one‑sentence intent for the initiative. Share it in every channel for a week.",
-          "Replace one checklist with a ‘definition of success’ and guardrails.",
-          "Hold a 15‑minute ‘captain’s judgment’ roundtable—one risky call each person is empowered to make.",
-        ],
-        angles: ["From micromanagement to mission clarity", "Outcome > Output"],
-      },
-      {
-        id: "garden-constraints",
-        title: "The Garden Trellis",
-        setting: "Garden",
-        tags: ["Innovation", "Constraints", "Process/Flow"],
-        short:
-          "A gardener wanted taller beans. With no budget for new soil or tools, she lashed a trellis from fallen branches. The beans climbed what existed and rose higher than before. ‘Constraints,’ she noted, ‘are not fences; they’re shapes.’ She began to love scavenger solutions. Soon the whole garden stood on clever supports—stakes from pruned limbs, beds edged by old brick. The yield wasn’t flashy, but it fed everyone well.",
-        full:
-          "A gardener eyed her stunted beans. She had no budget for compost, no time for terraces, no irrigation but a leaky hose. Instead of cursing, she lashed a trellis from branches gathered after a windstorm. The vines climbed what was available and reached the sun. She started seeing constraints differently—not fences, but shapes to grow along. Soon, pruned limbs became stakes, cracked bricks edged beds, a salvaged barrel caught rain. The garden looked humble yet elegant, and the harvest fed neighbors through the season. ‘Ingenuity isn’t the absence of limits,’ she wrote in her journal. ‘It’s the dance with them.’",
-        moral: "Let constraints shape creativity, not shrink it.",
-        reflections: [
-          "Which limit can become your trellis rather than your cage?",
-          "Where would a scavenged, 80/20 solution be enough right now?",
-          "What can grow vertically instead of wider?",
-        ],
-        actions: [
-          "Name one ‘nice to have’ you’ll drop to reinforce one ‘must have.’",
-          "Pilot a low‑cost version using only existing tools and a 2‑week timebox.",
-          "Create a visible ‘constraint ledger’ and pair each with a creative workaround.",
-        ],
-        angles: ["Resourcefulness over resources", "Do more with what you have"],
-      },
-      {
-        id: "bridge-boulders",
-        title: "The Bridge of Boulders",
-        setting: "River Crossing",
-        tags: ["Process/Flow", "Roadmapping", "Risk"],
-        short:
-          "A village faced a river strewn with boulders that blocked travel. Rather than clearing them, the mason arranged the rocks into stepping stones. Crossing stayed slow, but it became dependable. Traders returned; children walked to school. The lesson spread: remove a few, rearrange the rest. The river didn’t change. The crossing did.",
-        full:
-          "A river littered with boulders cut off a village from the market. For years people argued: dredge the whole channel or build an expensive bridge. A mason tried something smaller. She shifted the largest rocks a little and wedged flattest ones between, creating a stepping‑stone path. You still got your feet wet, but caravans moved again, schools reopened, and the doctor could cross with medicine. Later, when prosperity returned, they built a real bridge—faster, funded by the trade the stepping stones restored. ‘Perfection can wait; passage cannot,’ the mason said, tapping her chisel.",
-        moral: "Rearrange obstacles into throughput, then scale.",
-        reflections: [
-          "Which three boulders slow 80% of your flow?",
-          "What partial crossing would restore momentum this sprint?",
-          "What can be improved now without waiting for the ‘perfect bridge’?",
-        ],
-        actions: [
-          "Run a 2‑week ‘boulder shift’: fix top 3 blockers, measure lead time.",
-          "Publish a before/after flow diagram that shows cycle time gains.",
-          "Create an ‘upgrade later’ list—funded by value unlocked today.",
-        ],
-        angles: ["Stop starting, start finishing", "Flow beats scope"],
-      },
-      {
-        id: "canal-flow",
-        title: "The Clogged Canal",
-        setting: "Harbor",
-        tags: ["Prioritization", "Process/Flow", "Stakeholders"],
-        short:
-          "A canal jammed with half‑built barges starved the port. The harbormaster closed new entries and ordered crews to finish the vessels nearest the lock. Ship by ship, the channel cleared; exports surged. The town learned: starting feels like progress; finishing funds it.",
-        full:
-          "A once‑busy canal grew still. Everywhere sat half‑built barges, each awaiting a different craftsperson. The harbormaster banned new entries for 30 days and posted a rule: finish the vessels closest to the lock first. Grumbling turned to relief as the queue shrank and invoices were finally paid. By month’s end, the harbor thrummed again. ‘Work in process is like silt,’ she said at the guild hall. ‘Invisible until you run aground.’",
-        moral: "Limit WIP; prioritize by proximity to value.",
-        reflections: [
-          "What work is closest to releasing value?",
-          "Where can you pause intake to clear the channel?",
-          "Who needs to re‑sequence tasks to finish instead of start?",
-        ],
-        actions: [
-          "Set a visible WIP limit and enforce it for 2 sprints.",
-          "Adopt ‘next ship out’ ordering for the queue.",
-          "Publish a weekly ‘finished value’ scoreboard.",
-        ],
-        angles: ["Finish lines, not start lines", "Value proximity"],
-      },
-      {
-        id: "two-clockmakers",
-        title: "The Two Clockmakers",
-        setting: "Workshop",
-        tags: ["Quality", "Technical Debt", "Process/Flow"],
-        short:
-          "Two clockmakers bid for the town hall clock. One promised speed using brittle parts; the other insisted on sturdy gears and time to test. The town chose speed. The clock worked—until winter. After many repairs, they bought the second clock. It cost less than all the fixes. ‘Fast is slow if you loop back forever,’ the mayor sighed.",
-        full:
-          "The council wanted a clock for the square. The first craftsperson promised a low price and delivery by market day, warning that occasional hiccups might require visits. The second quoted more and requested a month for testing. The town chose speed. The clock sang for autumn and died in winter. Repairs multiplied; the hands drifted. Eventually they replaced it with the second maker’s clock, which kept time year after year. In the audit, the treasurer wrote: ‘We paid twice. Once in coins, once in chaos.’",
-        moral: "Cheap now can mean costly forever.",
-        reflections: [
-          "Where are you borrowing from the future with brittle fixes?",
-          "What would ‘tested once, trusted often’ look like?",
-          "What metric reveals the hidden interest on your debt?",
-        ],
-        actions: [
-          "Ring‑fence 15% capacity for quality and debt pay‑down.",
-          "Define acceptance tests before work begins.",
-          "Track rework hours as a first‑class KPI.",
-        ],
-        angles: ["Penny wise, pound foolish", "Slow is smooth"]
-      },
-      {
-        id: "orchestra",
-        title: "The Orchestra Without a Conductor",
-        setting: "Concert Hall",
-        tags: ["Stakeholders", "Communication", "Alignment"],
-        short:
-          "An orchestra tried to perform without a conductor. Each section excelled alone, but entries clashed and crescendos fought. A violinist taped a simple cue card at the front: ‘Tempo: 92. Theme: woodwinds lead. Hand off at letter C.’ They played again—fewer heroics, better music.",
-        full:
-          "The festival wanted a ‘leaderless’ performance. Rehearsals dazzled within sections yet collapsed at transitions. After a rough run, a violinist taped a big card to the music stand where all could see: ‘Tempo 92. Theme: woodwinds lead. Hand‑off to brass at C. Percussion owns the cutoff.’ It wasn’t a maestro, just shared cues. The piece became coherent. In the bar after, someone said, ‘We didn’t need a conductor. We needed coordination.’",
-        moral: "Shared cues beat solo brilliance.",
-        reflections: [
-          "What 3 visible cues would align your ‘sections’?",
-          "Where are handoffs failing despite individual excellence?",
-          "Who is your unofficial concertmaster—can they post the cues?",
-        ],
-        actions: [
-          "Publish a one‑page ‘who leads when’ map for the project.",
-          "Run a handoff rehearsal focused only on transitions.",
-          "Add visible countdowns to major entries/cutoffs.",
-        ],
-        angles: ["Coordination over heroics", "Make the handoff obvious"],
-      },
-      {
-        id: "shopkeeper",
-        title: "The Shopkeeper’s Three Customers",
-        setting: "Market",
-        tags: ["Decision-Making", "Stakeholders", "Prioritization"],
-        short:
-          "A shopkeeper had three loyal customers—one valued speed, one price, one bespoke service. When stock ran short, she tried pleasing all and pleased none. At last she chose: match speed for the courier, hold fair prices for families, and limit bespoke to Thursdays. Each customer felt seen, and the shop survived.",
-        full:
-          "A small shop sat at a crossroads. The courier needed instant purchases, families needed fair prices, artisans craved special orders. Short on staff, the owner tried to keep up with everyone and kept disappointing all. She finally posted clear promises: ‘Courier line: under 3 minutes. Family aisle: best price weekly. Bespoke Thursday: custom work, 6 slots.’ Trade stabilized. Choice, not chance, set expectations.",
-        moral: "Strategy is choosing who wins when all can’t.",
-        reflections: [
-          "Who are your three ‘customers’ and what do they truly value?",
-          "Which promise will you make—and which won’t you?",
-          "How will you signal the trade‑offs visibly?",
-        ],
-        actions: [
-          "Write a simple ‘choices we made’ memo (1 page).",
-          "Create separate lanes for speed, price, and custom work.",
-          "Review promises monthly against outcomes.",
-        ],
-        angles: ["If everything’s a priority, nothing is", "Explicit trade‑offs"],
-      },
-      {
-        id: "map-compass",
-        title: "The Map and the Compass",
-        setting: "Expedition",
-        tags: ["Data & Metrics", "Decision-Making", "Risk"],
-        short:
-          "Explorers carried a beautiful map drawn in summer. Winter changed the river. The cartographer insisted the map was right; the guide tapped a compass and the cold wind. They chose the compass, then updated the map for spring. Data informs; reality decides.",
-        full:
-          "A team set out with a celebrated map—surveyed in warm months when the river ran shallow. Winter swelled the water and erased sandbars. The cartographer argued to follow the contours; the guide felt the current and watched the sky. They chose the compass and waded where the river allowed, then redrew the map for others. ‘Trust data, but sail the water you’re in,’ the guide said as they dried their boots by the fire.",
-        moral: "Use metrics, choose judgment, update models.",
-        reflections: [
-          "Which metric is summer’s map for today’s winter?",
-          "Where must frontline signals override dashboards?",
-          "What will you update after the decision?",
-        ],
-        actions: [
-          "Add a ‘ground truth’ check before relying on a metric.",
-          "Pilot decisions with a rollback plan and write the post‑update.",
-          "Retire one stale KPI; replace with a behavior‑based one.",
-        ],
-        angles: ["Reality > reports", "Models are opinions"]
-      },
-      {
-        id: "pottery-studio",
-        title: "The Pottery Studio",
-        setting: "Atelier",
-        tags: ["Performance", "Feedback", "Innovation"],
-        short:
-          "A pottery class split in two: one graded on a single perfect pot, the other on total pounds produced. The second group’s work was best; iterations taught them more than theorizing. Quantity made quality.",
-        full:
-          "In a studio, students were divided. Group A would be graded on one perfect pot by term’s end. Group B would be graded on total pounds produced. Group B threw dozens—awkward, lopsided, then graceful. Group A debated and delayed. At the show, Group B’s pieces won praise. ‘Excellence,’ the instructor said, holding up a cup still warm from the kiln, ‘is the child of repetition.’",
-        moral: "Ship, learn, repeat beats think, wait, perfect.",
-        reflections: [
-          "Where can you create a safe ‘quantity lane’ to learn fast?",
-          "What small batch would teach you the most this week?",
-          "How will you capture lessons between attempts?",
-        ],
-        actions: [
-          "Run a 5‑day ‘10 reps’ challenge on one skill.",
-          "Schedule micro‑critiques: 10 minutes, daily, two insights.",
-          "Celebrate iterations shipped, not just outcomes.",
-        ],
-        angles: ["Reps over reps of planning", "Practice makes progress"],
-      },
-      {
-        id: "beehive-winter",
-        title: "The Beehive’s Winter",
-        setting: "Apiary",
-        tags: ["Burnout", "Capacity Planning", "Change"],
-        short:
-          "In summer the hive roared; in winter it clustered to conserve heat. The beekeeper taught new apprentices: a hive that never rests dies noisy. Teams, too, need seasons—harvest, then huddle.",
-        full:
-          "A thriving hive filled combs through summer. When frost came, bees tightened into a living sphere, shivering to share warmth, rationing honey, flying only on bright days. The beekeeper told apprentices, ‘A hive that behaves like it’s July in January will starve.’ Teams are no different—push hard in season, then consolidate, recover, and plan. Cadence is capacity’s quiet secret.",
-        moral: "Sustainable pace beats perpetual sprint.",
-        reflections: [
-          "Where should your team be clustering instead of foraging?",
-          "What work can wait until spring?",
-          "How will you signal the season you’re in?",
-        ],
-        actions: [
-          "Declare a consolidation sprint: fix, document, automate.",
-          "Protect no‑meeting blocks for recovery and deep work.",
-          "Track burnout leading indicators (after‑hours, error rates).",
-        ],
-        angles: ["Cadence over chaos", "Seasons of work"],
-      },
-      {
-        id: "stonemason-chisel",
-        title: "The Stonemason’s Chisel",
-        setting: "Quarry",
-        tags: ["Feedback", "Performance", "Communication"],
-        short:
-          "An apprentice carved blindly at a block. ‘Tell me what to do,’ he begged. The mason handed him a chisel and pointed: ‘Two strikes here, one there. Then step back and look.’ Vague critique breaks spirits; precise feedback builds statues.",
-        full:
-          "A master mason watched an apprentice bruise a block with random blows. ‘I’m trying,’ the apprentice said, ‘but what do you want?’ The mason took the chisel, tapped two small marks, and returned it. ‘Strike here and here. Then stop. Look for the line the stone wants to follow.’ The face emerged. The apprentice smiled. Later he carved on his own, checking lines after each trio of strikes. Feedback became instruction, not insult.",
-        moral: "Specific, observable feedback accelerates mastery.",
-        reflections: [
-          "Where is your feedback vague or late?",
-          "Can you point to the exact ‘two strikes’ to change?",
-          "How will you build look‑pause‑adjust into the work?",
-        ],
-        actions: [
-          "Adopt ‘SBI’ notes (Situation‑Behavior‑Impact) for tough feedback.",
-          "Use screen‑share or shadowing to show the line, not just name it.",
-          "Schedule short, frequent reviews vs. one long post‑mortem.",
-        ],
-        angles: ["Aim the chisel", "Make excellence observable"],
-      },
-      {
-        id: "ferry-storm",
-        title: "The Ferry in a Storm",
-        setting: "Bay",
-        tags: ["Crisis", "Change", "Risk"],
-        short:
-          "A ferry captain hit sudden squalls. Instead of aiming for the far dock, she ducked into a sheltered cove, anchored, and reset the course after the worst passed. Passengers grumbled—until they reached safely. In rough change, survival is speed.",
-        full:
-          "Halfway across the bay, weather turned. Waves slapped broadside; the wheel fought back. The captain angled toward a cove and dropped anchor. When the squall eased, she radioed the harbor and plotted a new line with the current. The schedule slipped, not the ferry. ‘In storms,’ she told the deckhand, ‘we trade distance for control.’",
-        moral: "Stabilize first, then steer anew.",
-        reflections: [
-          "What is your nearest safe cove (stabilization move)?",
-          "Which commitments can you renegotiate without capsizing trust?",
-          "What will you re‑plot once the gusts ease?",
-        ],
-        actions: [
-          "Trigger a stop‑the‑line for fragile systems; publish a storm plan.",
-          "Communicate new ETAs proactively to stakeholders.",
-          "Define ‘resume criteria’ to exit crisis mode deliberately.",
-        ],
-        angles: ["First, do no harm", "Control over speed"],
-      },
-      {
-        id: "duplicate-keys",
-        title: "The Duplicate Keys",
-        setting: "Workshop",
-        tags: ["Delegation", "Performance", "Succession"],
-        short:
-          "Only one foreman held the workshop keys. When he took sick, production froze. The owner cut duplicates and documented the lockbox. Work resumed, and apprentices learned to open in the morning. Authority shared became resilience earned.",
-        full:
-          "A workshop thrived under a brilliant foreman who opened, closed, and approved everything. Then he fell ill for a week. Work stalled, deliveries missed, clients soured. The owner made duplicates, labeled a lockbox, and trained two apprentices to open and close. The foreman returned to a steadier shop—and more time to teach. Single points of failure make heroes, then hostages.",
-        moral: "Share keys before you need them.",
-        reflections: [
-          "Where are you the single point of failure?",
-          "Which decision rights can you safely delegate now?",
-          "What docs unlock the next person’s autonomy?",
-        ],
-        actions: [
-          "Create a RACI for critical flows; move one ‘A’ to a deputy.",
-          "Record a 10‑minute ‘how to open’ screencast for a task.",
-          "Set backup rotations for key approvals.",
-        ],
-        angles: ["Redundancy is strategy", "Teach to be free"],
-      },
-      {
-        id: "lanterns-path",
-        title: "Lanterns on the Path",
-        setting: "Mountain Trail",
-        tags: ["Roadmapping", "Prioritization", "Stakeholders"],
-        short:
-          "Hikers feared a dark trail to the summit. The guide placed lanterns every hundred steps and marked three shelters. People stopped asking ‘Are we there yet?’ and started counting lanterns. Progress became visible—and motivating.",
-        full:
-          "A group wanted to summit before dawn to watch sunrise. The trail was safe but felt endless. The guide spaced lanterns and named three shelters with bright flags. ‘Next stop: Birch Ledge.’ Anxiety faded into rhythm—lantern, step, shelter. At sunrise, the group reached the peak smiling. The mountain was the same height; the path felt shorter because progress was measurable and rest was planned.",
-        moral: "Make progress visible and rest explicit.",
-        reflections: [
-          "What are your lanterns every ~2 weeks?",
-          "Where are the shelters—pre‑planned recovery points?",
-          "How will you show stakeholders rising elevation, not just effort?",
-        ],
-        actions: [
-          "Define milestones by outcomes, not tasks.",
-          "Install a visible ‘lantern counter’ dashboard.",
-          "Book recovery days at phase gates.",
-        ],
-        angles: ["Milestones as motivation", "Show the climb"],
-      },
-      {
-        id: "ledger-loom",
-        title: "The Ledger and the Loom",
-        setting: "Workshop Ledger",
-        tags: ["Compliance/Audit", "Data & Metrics", "Vendor Mgmt"],
-        short:
-          "A weaver matched thread counts to a ledger. Mistakes early in the warp made patterns crooked down the whole cloth. She stopped blaming the loom and checked the tally at the door. Upstream accuracy saved downstream beauty—and rework.",
-        full:
-          "In a textile hall, a master weaver tracked every spool on a ledger. When patterns kept skewing, apprentices blamed the loom. The master checked the entry sheet: thread counts at receiving were off by small amounts, and those small amounts multiplied across the warp. She fixed the intake, added spot checks, and required vendors to certify counts. The cloth straightened. ‘Audit starts at the door,’ she said, closing the ledger.",
-        moral: "Upstream data quality prevents downstream audit pain.",
-        reflections: [
-          "Where does your ‘ledger at the door’ live?",
-          "What two upstream checks would prevent 80% of downstream fixes?",
-          "Which vendor attestations should be contractually required?",
-        ],
-        actions: [
-          "Add receiving‑stage validations and periodic reconciliations.",
-          "Tie vendor payment to data quality SLAs.",
-          "Publish a defect‑origin heatmap—fix at the source.",
-        ],
-        angles: ["Source controls", "Trust and verify"],
-      },
-      {
-        id: "librarian",
-        title: "The Librarian’s Whisper",
-        setting: "Library",
-        tags: ["Communication", "Stakeholders", "Change"],
-        short:
-          "A noisy hall posted bigger ‘Quiet!’ signs. It got louder. A new librarian stood at the doorway, greeted patrons by name, and whispered. People matched her volume. ‘Culture is caught,’ she logged, ‘not commanded.’",
-        full:
-          "The reading room turned into a marketplace of voices. The staff printed larger red ‘QUIET’ posters. Volume rose in defiance. A new librarian tried another method: she greeted patrons softly at the threshold and spoke in a near‑whisper at the desk. Students leaned in; conversations dropped. She rearranged chairs into clusters and put small lamps on tables—subtle cues for focus. The room calmed. Later, she wrote, ‘Tone multiplies. Start as we want to continue.’",
-        moral: "Model the behavior you want at the door.",
-        reflections: [
-          "Where can you set the tone at the threshold?",
-          "What physical or visual cues would invite the behavior?",
-          "Who are your volume‑setters—can they go first?",
-        ],
-        actions: [
-          "Open meetings with pace and volume you want sustained.",
-          "Redesign the space for the behavior (lights, layout, seating).",
-          "Enlist influencers to model visibly for one week.",
-        ],
-        angles: ["Culture by design", "Lead with tone"],
-      },
+      { id:"lighthouse-fleet", title:"The Lighthouse and the Fleet", tags:["Alignment"], short:"When intent is clear, autonomy steers.", full:"A longer version...", moral:"Broadcast intent.", reflections:["What intent?","Where over-spec?","Who needs autonomy?"], actions:["Draft intent.","Replace a checklist.","Run captain's roundtable."], angles:["Outcome > Output"] }
     ];
 
-    // -----------------------------
-    // Helpers
-    // -----------------------------
     const TONE_WRAPPERS = {
-      "sage": {
-        pre: "Here’s a story to carry in your pocket:",
-        post: "May this nudge your judgment more than your to‑do list.",
-      },
-      "playful": {
-        pre: "Story mode: on. ☕🐙",
-        post: "Now go make a little mischief—in a good way.",
-      },
-      "practical": {
-        pre: "Try this quick parable, then the checklist:",
-        post: "Translate one line into action before the next meeting.",
-      },
-      "tough-love": {
-        pre: "No sugar coating—just a clean mirror:",
-        post: "Choose the move that shrinks risk fastest.",
-      },
+      "sage": { pre: "Here’s a story to carry in your pocket:", post: "May this nudge your judgment more than your to-do list." },
+      "playful": { pre: "Story mode: on. ☕🐙", post: "Now go make a little mischief—in a good way." },
+      "practical": { pre: "Try this quick parable, then the checklist:", post: "Translate one line into action before the next meeting." },
+      "tough-love": { pre: "No sugar coating—just a clean mirror:", post: "Choose the move that shrinks risk fastest." },
     };
-
-    function scoreParable(p, selectedTags, textTags) {
-      const tagSet = new Set(selectedTags.concat(textTags));
-      let score = 0;
-      p.tags.forEach((t) => {
-        if (tagSet.has(t)) score += 2;
-      });
-      score += Math.min(2, p.tags.filter((t) => tagSet.has(t)).length);
-      return score;
-    }
 
     const KEYWORD_TAG_MAP = {
-      align: ["Alignment"],
-      strategy: ["Decision-Making"],
-      decide: ["Decision-Making"],
-      stakeholder: ["Stakeholders"],
-      communicate: ["Communication"],
-      message: ["Communication"],
-      priority: ["Prioritization"],
-      backlog: ["Prioritization", "Process/Flow"],
-      wip: ["Prioritization", "Process/Flow"],
-      flow: ["Process/Flow"],
-      bottleneck: ["Process/Flow"],
-      block: ["Risk", "Process/Flow"],
-      risk: ["Risk"],
-      delegate: ["Delegation"],
-      overload: ["Burnout"],
-      burnout: ["Burnout"],
-      audit: ["Compliance/Audit"],
-      compliance: ["Compliance/Audit"],
-      data: ["Data & Metrics"],
-      metric: ["Data & Metrics"],
-      vendor: ["Vendor Mgmt"],
-      contract: ["Vendor Mgmt"],
-      quality: ["Quality"],
-      debt: ["Technical Debt"],
-      change: ["Change"],
-      crisis: ["Crisis"],
-      roadmap: ["Roadmapping"],
-      deadline: ["Roadmapping", "Prioritization"],
-      feedback: ["Feedback"],
-      perform: ["Performance"],
-      succession: ["Delegation"],
-      keys: ["Delegation"],
-      team: ["Alignment"],
-      PERM: ["Compliance/Audit"],
-      OPR: ["Compliance/Audit"],
-      RAC: ["Compliance/Audit"],
-      eligibility: ["Process/Flow"],
+      align:["Alignment"], strategy:["Decision-Making"], decide:["Decision-Making"], stakeholder:["Stakeholders"],
+      communicate:["Communication"], message:["Communication"], priority:["Prioritization"], backlog:["Prioritization","Process/Flow"],
+      wip:["Prioritization","Process/Flow"], flow:["Process/Flow"], bottleneck:["Process/Flow"], block:["Risk","Process/Flow"],
+      risk:["Risk"], delegate:["Delegation"], overload:["Burnout"], burnout:["Burnout"], audit:["Compliance/Audit"],
+      compliance:["Compliance/Audit"], data:["Data & Metrics"], metric:["Data & Metrics"], vendor:["Vendor Mgmt"],
+      contract:["Vendor Mgmt"], quality:["Quality"], debt:["Technical Debt"], change:["Change"], crisis:["Crisis"],
+      roadmap:["Roadmapping"], deadline:["Roadmapping","Prioritization"], feedback:["Feedback"], perform:["Performance"],
+      succession:["Delegation"], keys:["Delegation"], team:["Alignment"], PERM:["Compliance/Audit"], OPR:["Compliance/Audit"],
+      RAC:["Compliance/Audit"], eligibility:["Process/Flow"],
     };
 
-    function extractTextTags(text) {
-      const words = text
-        .toLowerCase()
-        .replace(/[^a-z0-9\\s]/g, " ")
-        .split(/\\s+/);
+    // STATE ------------------------------
+    let selectedTags = ["Alignment","Prioritization"];
+    let tone = "practical";
+    let length = "short";
+    let lastParable = null;
+
+    // HELPERS ------------------------------
+    const byId = (id) => document.getElementById(id);
+
+    function classNames(...xs){ return xs.filter(Boolean).join(" "); }
+
+    function extractTextTags(text){
+      const words = text.toLowerCase().replace(/[^a-z0-9\s]/g," ").split(/\s+/);
       const found = new Set();
-      for (const w of words) {
-        if (KEYWORD_TAG_MAP[w]) KEYWORD_TAG_MAP[w].forEach((t) => found.add(t));
-      }
+      for(const w of words){ if(KEYWORD_TAG_MAP[w]) KEYWORD_TAG_MAP[w].forEach(t=>found.add(t)); }
       return Array.from(found);
     }
 
-    function pickParable(parables, selectedTags, textTags) {
-      const scored = parables
-        .map((p) => ({ p, s: scoreParable(p, selectedTags, textTags) }))
-        .sort((a, b) => b.s - a.s);
+    function scoreParable(p, selectedTags, textTags){
+      const tagSet = new Set([...selectedTags, ...textTags]);
+      let score = 0;
+      p.tags.forEach(t=>{ if(tagSet.has(t)) score += 2; });
+      score += Math.min(2, p.tags.filter(t=>tagSet.has(t)).length);
+      return score;
+    }
+
+    function pickParable(parables, selectedTags, textTags){
+      const scored = parables.map(p=>({p, s: scoreParable(p, selectedTags, textTags)})).sort((a,b)=>b.s-a.s);
       const topScore = scored[0]?.s ?? 0;
-      const top = scored.filter((x) => x.s === topScore).map((x) => x.p);
+      const top = scored.filter(x=>x.s===topScore).map(x=>x.p);
       return top[Math.floor(Math.random() * top.length)] || parables[0];
     }
 
-    function classNames(...xs) {
-      return xs.filter(Boolean).join(" ");
+    function copyToClipboard(text){
+      if (navigator.clipboard && window.isSecureContext){
+        return navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = text; ta.style.position="fixed"; ta.style.left="-9999px";
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand("copy"); document.body.removeChild(ta);
+        return Promise.resolve();
+      }
     }
 
-    function TagPicker({ value, onChange }) {
-      const toggle = (t) => {
-        if (value.includes(t)) onChange(value.filter((x) => x !== t));
-        else onChange([...value, t]);
+    function chip(label, active, onClick){
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.textContent = label;
+      btn.className = "chip" + (active ? " active" : "");
+      btn.addEventListener("click", onClick);
+      return btn;
+    }
+
+    // UI INIT ------------------------------
+    function renderTags(){
+      const holder = byId("tagPicker");
+      holder.innerHTML = "";
+      TAGS.forEach(t => {
+        holder.appendChild(chip(t, selectedTags.includes(t), () => {
+          if(selectedTags.includes(t)) selectedTags = selectedTags.filter(x=>x!==t);
+          else selectedTags = [...selectedTags, t];
+          renderTags();
+        }));
+      });
+    }
+
+    function renderTone(){
+      const holder = byId("toneSelect");
+      holder.innerHTML = "";
+      ["practical","sage","playful","tough-love"].forEach(t => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = t.replace("-"," ");
+        btn.className = classNames("px-3 py-1 rounded-2xl border text-sm shadow-sm capitalize",
+          tone===t ? "bg-black/90 text-white border-black" : "bg-white text-gray-700 border-gray-300 hover:border-gray-400");
+        btn.addEventListener("click", ()=>{ tone = t; renderTone(); });
+        holder.appendChild(btn);
+      });
+    }
+
+    function renderLength(){
+      const holder = byId("lengthToggle");
+      holder.innerHTML = "";
+      ["short","full"].forEach(opt => {
+        const btn = document.createElement("button");
+        btn.textContent = opt==="short" ? "Bite-size" : "Full";
+        btn.className = classNames("px-3 py-1 text-sm", length===opt ? "bg-black/90 text-white" : "bg-white text-gray-700");
+        btn.addEventListener("click", ()=>{ length = opt; renderLength(); });
+        holder.appendChild(btn);
+      });
+    }
+
+    function addChat(role, content){
+      const chat = byId("chat");
+      const box = document.createElement("div");
+      box.className = classNames("rounded-2xl p-3 border shadow-sm", role==="user" ? "bg-gray-50 border-gray-200" : "bg-amber-50 border-amber-200");
+      const label = document.createElement("div");
+      label.className = "text-xs uppercase tracking-wide text-gray-500 mb-1";
+      label.textContent = role==="user" ? "You" : "Coach";
+      const text = document.createElement("div");
+      text.className = "whitespace-pre-wrap leading-relaxed text-[15px]";
+      text.textContent = content;
+      box.appendChild(label); box.appendChild(text);
+      if(chat.firstElementChild && chat.firstElementChild.classList.contains("note")) chat.innerHTML="";
+      chat.appendChild(box);
+      chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
+    }
+
+    function renderResult(p){
+      const section = byId("result");
+      section.innerHTML = "";
+      const title = document.createElement("h2");
+      title.className = "text-xl font-semibold";
+      title.textContent = p.title;
+      const body = document.createElement("p");
+      body.className = "mt-2 text-gray-700 whitespace-pre-wrap";
+      body.textContent = (length==="short" ? p.short : p.full);
+      const moral = document.createElement("div");
+      moral.className = "mt-3 font-medium";
+      moral.innerHTML = 'Moral: <span class="font-normal"></span>';
+      moral.querySelector("span").textContent = p.moral;
+
+      const grid = document.createElement("div");
+      grid.className = "mt-4 grid md:grid-cols-2 gap-4";
+
+      const reflect = document.createElement("div");
+      const rH = document.createElement("h4"); rH.className="font-medium"; rH.textContent="Reflect";
+      const rUl = document.createElement("ul"); rUl.className="list-disc ml-5 mt-2 space-y-1 text-gray-700";
+      p.reflections.forEach(q=>{ const li=document.createElement("li"); li.textContent=q; rUl.appendChild(li); });
+      reflect.appendChild(rH); reflect.appendChild(rUl);
+
+      const act = document.createElement("div");
+      const aH = document.createElement("h4"); aH.className="font-medium"; aH.textContent="Try";
+      const aUl = document.createElement("ul"); aUl.className="list-disc ml-5 mt-2 space-y-1 text-gray-700";
+      p.actions.forEach(a=>{ const li=document.createElement("li"); li.textContent=a; aUl.appendChild(li); });
+      act.appendChild(aH); act.appendChild(aUl);
+
+      grid.appendChild(reflect); grid.appendChild(act);
+
+      const btnRow = document.createElement("div");
+      btnRow.className = "mt-4 flex gap-2";
+      const copy = document.createElement("button");
+      copy.className = "btn-outline"; copy.textContent = "Copy";
+      copy.addEventListener("click", ()=> copyToClipboard(coachCardText(p)));
+      const angle = document.createElement("button");
+      angle.className = "btn-outline"; angle.textContent = "Another angle";
+      angle.addEventListener("click", ()=> addAltAngle());
+      btnRow.appendChild(copy); btnRow.appendChild(angle);
+
+      section.appendChild(title); section.appendChild(body); section.appendChild(moral); section.appendChild(grid); section.appendChild(btnRow);
+      section.classList.remove("hidden");
+    }
+
+    function coachCardText(p){
+      return `${p.title}
+
+${length==="short" ? p.short : p.full}
+
+Moral: ${p.moral}
+
+Reflection Questions:
+- ${p.reflections.join("
+- ")}
+
+Actions:
+- ${p.actions.join("
+- ")}`;
+    }
+
+    // ACTIONS ------------------------------
+    function draw(){
+      const challenge = byId("challenge").value.trim();
+      const textTags = extractTextTags(challenge);
+      byId("detected").textContent = textTags.length ? `I also detected: ${textTags.join(", ")}` : "";
+
+      const p = pickParable(PARABLES, selectedTags, textTags);
+      lastParable = p;
+
+      const w = TONE_WRAPPERS[tone];
+      const story = `${w.pre}
+
+${length==="short" ? p.short : p.full}
+
+— Moral: ${p.moral}
+
+Reflect:
+• ${p.reflections[0]}
+• ${p.reflections[1]}
+• ${p.reflections[2]}
+
+Try:
+• ${p.actions[0]}
+• ${p.actions[1]}
+• ${p.actions[2]}
+
+${w.post}`;
+
+      addChat("user", challenge || selectedTags.join(", "));
+      addChat("coach", story);
+      renderResult(p);
+
+      byId("copyBtn").classList.remove("hidden");
+      byId("copyBtn2").classList.remove("hidden");
+      byId("angleBtn").disabled = false;
+    }
+
+    function addAltAngle(){
+      if(!lastParable) return;
+      const angles = lastParable.angles || [];
+      const angle = angles[Math.floor(Math.random() * (angles.length || 1))] || "Shift focus to the simplest actionable move.";
+      addChat("coach", `Another angle on “${lastParable.title}”: ${angle}`);
+    }
+
+    function init(){
+      // tags
+      renderTags();
+      // tone
+      renderTone();
+      // length
+      renderLength();
+      // buttons
+      byId("drawBtn").addEventListener("click", draw);
+      byId("angleBtn").addEventListener("click", addAltAngle);
+      const copyAll = ()=> {
+        if(!lastParable) return;
+        copyToClipboard(coachCardText(lastParable));
       };
-      return (
-        <div className="flex flex-wrap gap-2">
-          {TAGS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => toggle(t)}
-              className={classNames(
-                "px-3 py-1 rounded-2xl border text-sm shadow-sm",
-                value.includes(t)
-                  ? "bg-black/90 text-white border-black"
-                  : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-              )}
-              aria-pressed={value.includes(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      );
+      byId("copyBtn").addEventListener("click", copyAll);
+      byId("copyBtn2").addEventListener("click", copyAll);
     }
 
-    function ToneSelect({ value, onChange }) {
-      const tones = ["practical", "sage", "playful", "tough-love"];
-      return (
-        <div className="flex gap-2 items-center">
-          {tones.map((t) => (
-            <button
-              key={t}
-              onClick={() => onChange(t)}
-              type="button"
-              className={classNames(
-                "px-3 py-1 rounded-2xl border text-sm shadow-sm capitalize",
-                value === t ? "bg-black/90 text-white border-black" : "bg-white text-gray-700 border-gray-300 hover:border-gray-400"
-              )}
-              aria-pressed={value === t}
-            >
-              {t.replace("-", " ")}
-            </button>
-          ))}
-        </div>
-      );
-    }
-
-    function LengthToggle({ value, onChange }) {
-      return (
-        <div className="inline-flex rounded-2xl border border-gray-300 overflow-hidden shadow-sm">
-          {["short", "full"].map((opt) => (
-            <button
-              key={opt}
-              onClick={() => onChange(opt)}
-              className={classNames(
-                "px-3 py-1 text-sm",
-                value === opt ? "bg-black/90 text-white" : "bg-white text-gray-700"
-              )}
-            >
-              {opt === "short" ? "Bite‑size" : "Full"}
-            </button>
-          ))}
-        </div>
-      );
-    }
-
-    function CopyButton({ text }) {
-      const [copied, setCopied] = useState(false);
-      return (
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              if (navigator.clipboard && window.isSecureContext) {
-                await navigator.clipboard.writeText(text);
-              } else {
-                const ta = document.createElement("textarea");
-                ta.value = text;
-                ta.style.position = "fixed";
-                ta.style.left = "-9999px";
-                document.body.appendChild(ta);
-                ta.focus();
-                ta.select();
-                document.execCommand("copy");
-                document.body.removeChild(ta);
-              }
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            } catch (e) {}
-          }}
-          className="px-3 py-1 rounded-2xl border border-gray-300 text-sm hover:border-gray-400"
-        >
-          {copied ? "Copied!" : "Copy"}
-        </button>
-      );
-    }
-
-    function SmallNote({ children }) {
-      return <p className="text-xs text-gray-500 leading-snug">{children}</p>;
-    }
-
-    function ManagerParableCoach() {
-      const [challenge, setChallenge] = useState("");
-      const [tags, setTags] = useState(["Alignment", "Prioritization"]);
-      const [tone, setTone] = useState("practical");
-      const [length, setLength] = useState("short");
-      const [lastParable, setLastParable] = useState(null);
-      const [chat, setChat] = useState([]);
-      const [busy, setBusy] = useState(false);
-      const scrollRef = useRef(null);
-
-      useEffect(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-        }
-      }, [chat]);
-
-      const textTags = useMemo(() => extractTextTags(challenge), [challenge]);
-
-      function generate() {
-        setBusy(true);
-        setTimeout(() => {
-          const p = pickParable(PARABLES, tags, textTags);
-          setLastParable(p);
-          const wrapper = TONE_WRAPPERS[tone];
-          const story = \`\${wrapper.pre}\n\n\${length === "short" ? p.short : p.full}\n\n— Moral: \${p.moral}\n\nReflect:\n• \${p.reflections[0]}\n• \${p.reflections[1]}\n• \${p.reflections[2]}\n\nTry:\n• \${p.actions[0]}\n• \${p.actions[1]}\n• \${p.actions[2]}\n\n\${wrapper.post}\`;
-          setChat((c) => [...c, { role: "user", content: challenge || tags.join(", ") }, { role: "coach", content: story }]);
-          setBusy(false);
-        }, 300);
-      }
-
-      function reframe() {
-        if (!lastParable) return;
-        const angles = lastParable.angles || [];
-        const angle = angles[Math.floor(Math.random() * (angles.length || 1))] || "Shift focus to the simplest actionable move.";
-        const alt = \`Another angle on “\${lastParable.title}”: \${angle}\`;
-        setChat((c) => [...c, { role: "coach", content: alt }]);
-      }
-
-      const coachCardText = lastParable
-        ? \`\${lastParable.title}\n\n\${length === "short" ? lastParable.short : lastParable.full}\n\nMoral: \${lastParable.moral}\n\nReflection Questions:\n- \${lastParable.reflections.join("\\n- ")}\n\nActions:\n- \${lastParable.actions.join("\\n- ")}\`
-        : "";
-
-      return (
-        <div className="min-h-dvh w-full text-gray-900">
-          <div className="max-w-5xl mx-auto p-6 md:p-10">
-            <header className="mb-6 md:mb-10">
-              <h1 className="text-2xl md:text-4xl font-semibold tracking-tight">Manager Parable Coach</h1>
-              <p className="text-gray-600 mt-2 max-w-2xl">
-                Give me a challenge. I’ll return a short parable, a moral, three reflection prompts, and three next steps—
-                practical, memorable, and just a bit mischievous.
-              </p>
-            </header>
-
-            <section className="grid md:grid-cols-3 gap-4 md:gap-6 mb-6">
-              <div className="md:col-span-2 bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-200">
-                <label className="text-sm font-medium">Describe your challenge</label>
-                <textarea
-                  className="mt-2 w-full h-28 rounded-xl border border-gray-300 p-3 focus:outline-none focus:ring-2 focus:ring-black/10"
-                  placeholder="E.g., We’re drowning in half‑done projects and stakeholders want everything yesterday."
-                  value={challenge}
-                  onChange={(e) => setChallenge(e.target.value)}
-                />
-
-                <div className="mt-4">
-                  <label className="text-sm font-medium">Tags (optional)</label>
-                  <div className="mt-2"><TagPicker value={tags} onChange={setTags} /></div>
-                  {textTags.length > 0 && (
-                    <SmallNote>
-                      I also detected: <span className="italic">{textTags.join(", ")}</span>
-                    </SmallNote>
-                  )}
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-4 items-center">
-                  <div>
-                    <label className="text-sm font-medium">Tone</label>
-                    <div className="mt-2"><ToneSelect value={tone} onChange={setTone} /></div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Length</label>
-                    <div className="mt-2"><LengthToggle value={length} onChange={setLength} /></div>
-                  </div>
-                  <div className="ml-auto flex gap-2 items-end">
-                    <button
-                      type="button"
-                      onClick={generate}
-                      disabled={busy}
-                      className="px-4 py-2 rounded-2xl bg-black/90 text-white shadow-sm disabled:opacity-60"
-                    >
-                      {busy ? "Thinking…" : "Draw a Parable"}
-                    </button>
-                    {lastParable && <CopyButton text={coachCardText} />}
-                  </div>
-                </div>
-
-                <SmallNote>
-                  Not for legal, HR, or safety emergencies. For harassment, discrimination, or legal issues, involve HR/Legal.
-                </SmallNote>
-              </div>
-
-              <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-200 flex flex-col">
-                <h3 className="font-medium mb-2">Session</h3>
-                <div ref={scrollRef} className="flex-1 overflow-y-auto pr-1 space-y-3" style={{maxHeight: "420px"}}>
-                  {chat.length === 0 && (
-                    <SmallNote>
-                      Your conversation will appear here. Try a challenge like “We have too many priorities and quality is slipping.”
-                    </SmallNote>
-                  )}
-                  {chat.map((t, i) => (
-                    <div key={i} className={classNames("rounded-2xl p-3 border shadow-sm", t.role === "user" ? "bg-gray-50 border-gray-200" : "bg-amber-50 border-amber-200")}>
-                      <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">{t.role === "user" ? "You" : "Coach"}</div>
-                      <div className="whitespace-pre-wrap leading-relaxed text-[15px]">{t.content}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <button type="button" onClick={reframe} disabled={!lastParable} className="px-3 py-2 rounded-2xl border border-gray-300 text-sm disabled:opacity-50">Another angle</button>
-                  {lastParable && <CopyButton text={coachCardText} />}
-                </div>
-              </div>
-            </section>
-
-            {lastParable && (
-              <section className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-gray-200">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1">
-                    <h2 className="text-xl font-semibold">{lastParable.title}</h2>
-                    <p className="mt-2 text-gray-700 whitespace-pre-wrap">{length === "short" ? lastParable.short : lastParable.full}</p>
-                    <div className="mt-3 font-medium">Moral: <span className="font-normal">{lastParable.moral}</span></div>
-                    <div className="mt-4 grid md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-medium">Reflect</h4>
-                        <ul className="list-disc ml-5 mt-2 space-y-1 text-gray-700">
-                          {lastParable.reflections.map((r, idx) => (
-                            <li key={idx}>{r}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <h4 className="font-medium">Try</h4>
-                        <ul className="list-disc ml-5 mt-2 space-y-1 text-gray-700">
-                          {lastParable.actions.map((a, idx) => (
-                            <li key={idx}>{a}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex gap-2">
-                      <CopyButton text={coachCardText} />
-                      <button
-                        type="button"
-                        onClick={reframe}
-                        className="px-3 py-1 rounded-2xl border border-gray-300 text-sm hover:border-gray-400"
-                      >
-                        Another angle
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            <footer className="mt-8 text-sm text-gray-500">
-              Built as an MVP. Want a Slack/Teams version, analytics, or your org’s stories baked in? Drop a line.
-            </footer>
-          </div>
-        </div>
-      );
-    }
-
-    const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(<ManagerParableCoach />);
+    window.addEventListener("DOMContentLoaded", init);
   </script>
 </body>
 </html>
